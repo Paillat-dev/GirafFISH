@@ -15,7 +15,7 @@ This repository contains a Python script that allows you to create a conversatio
 
 ## Creating and chatting with your AI clone
 
-To create a clone of yourself, simply run `start.bat` in your terminal or command prompt. This will start the script, and your clone will be ready to chat with you on Discord. At the beginning, your clone will not know how to respond to your messages. Do as many conversations as you can with your clone and then train your clone to improve its responses (see how to train your clone below).
+To create a clone of yourself, simply run `start.bat` in your terminal or command prompt on windows, or start the `generate.py` and `/bot/main.py` files on other os. This will start the script, and your clone will be ready to chat with you on Discord. At the beginning, your clone will not know how to respond to your messages. Do as many conversations as you can with your clone and then train your clone to improve its responses (see how to train your clone below).
 
 To start a conversation with your clone, use the `/threads` command in a Discord channel where your bot has been invited. This will create a new thread for your conversation. You can then start chatting with your clone by sending messages in the thread. Your clone will respond to your messages as best it can, based on its training data.
 
@@ -35,7 +35,9 @@ The `utils.py` file contains helper functions to add and remove conversation thr
 
 The `config.py` file contains the configuration variables used by the bot, such as the bot token loaded from the `` file, the model's name, the data path, the user name, and the instruction.
 
-The `train.py` file is used to train the model with a batch of conversations.
+The `finetune.py` file is used to train the model with a batch of conversations.
+
+The `generate.py` file starts the web api for generation.
 
 ## Notes
 
