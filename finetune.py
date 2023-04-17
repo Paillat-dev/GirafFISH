@@ -1,7 +1,7 @@
 import os
+import shutil
 import sys
 from typing import List
-
 import fire
 import torch
 import transformers
@@ -36,7 +36,7 @@ def train(
     # training hyperparams
     batch_size: int = 8,
     micro_batch_size: int = 4,
-    num_epochs: int = 50, # 50 is a lot, but we want to be sure we're overfitting (this is a small dataset)
+    num_epochs: int = 20,  # 50 is a lot, but we want to be sure we're overfitting (this is a small dataset)
     learning_rate: float = 1e-4,
     cutoff_len: int = 256,
     val_set_size: int = 10,
@@ -58,6 +58,26 @@ def train(
     wandb_log_model: str = "",  # options: false | true
     resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
 ):
+    # Get a list of all the directories in output_dir
+    dirs = os.listdir(output_dir)
+
+    # Filter out all the directories that don't start with "GIR_"
+    dirs = [d for d in dirs if d.startswith("GIR_")]
+
+    # If there are no directories that start with "GIR_", then set highest_dir to 0
+    if len(dirs) == 0:
+        highest_dir = 0
+    else:
+        # Otherwise, set highest_dir to the maximum of the numbers in the directory names
+        highest_dir = max([int(d.split("_")[1]) for d in dirs])
+
+    # Create a new directory name with the next highest number
+    new_dir = os.path.join(output_dir, "GIR_" + str(highest_dir + 1))
+
+    # Create the new directory
+    os.mkdir(new_dir)
+    # Set the output_dir to the new directory
+    output_dir = new_dir
     print(
         f"Training Alpaca-LoRA model with params:\n"
         f"base_model: {base_model}\n"
@@ -114,9 +134,7 @@ def train(
 
     tokenizer = LlamaTokenizer.from_pretrained(base_model)
 
-    tokenizer.pad_token_id = (
-        0  # unk. we want this to be different from the eos token
-    )
+    tokenizer.pad_token_id = 0  # unk. we want this to be different from the eos token
     tokenizer.padding_side = "left"  # Allow batched inference
 
     def tokenize(prompt, add_eos_token=True):
@@ -156,6 +174,8 @@ def train(
             ]  # could be sped up, probably
         return tokenized_full_prompt
 
+    # if files orand folders in lora path, delete them
+    # get all files in lora path with os module
     model = prepare_model_for_int8_training(model)
 
     config = LoraConfig(
@@ -182,9 +202,7 @@ def train(
             checkpoint_name = os.path.join(
                 resume_from_checkpoint, "adapter_model.bin"
             )  # only LoRA model - LoRA config above has to fit
-            resume_from_checkpoint = (
-                False  # So the trainer won't try loading its state
-            )
+            resume_from_checkpoint = False  # So the trainer won't try loading its state
         # The two files above have a different name depending on how they were saved, but are actually the same.
         if os.path.exists(checkpoint_name):
             print(f"Restarting from {checkpoint_name}")
@@ -199,12 +217,8 @@ def train(
         train_val = data["train"].train_test_split(
             test_size=val_set_size, shuffle=True, seed=42
         )
-        train_data = (
-            train_val["train"].shuffle().map(generate_and_tokenize_prompt)
-        )
-        val_data = (
-            train_val["test"].shuffle().map(generate_and_tokenize_prompt)
-        )
+        train_data = train_val["train"].shuffle().map(generate_and_tokenize_prompt)
+        val_data = train_val["test"].shuffle().map(generate_and_tokenize_prompt)
     else:
         train_data = data["train"].shuffle().map(generate_and_tokenize_prompt)
         val_data = None
@@ -242,9 +256,7 @@ def train(
 
     old_state_dict = model.state_dict
     model.state_dict = (
-        lambda self, *_, **__: get_peft_model_state_dict(
-            self, old_state_dict()
-        )
+        lambda self, *_, **__: get_peft_model_state_dict(self, old_state_dict())
     ).__get__(model, type(model))
 
     if torch.__version__ >= "2" and sys.platform != "win32":
@@ -259,7 +271,8 @@ def train(
 
 def generate_prompt(data_point):
     # sorry about the formatting disaster gotta move fast
-    return f"""{data_point["input"]} {data_point["output"]}"""
+    return f"""{data_point["prompt"]}\n{data_point["response"]}"""
+
 
 if __name__ == "__main__":
     fire.Fire(train)

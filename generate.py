@@ -1,11 +1,16 @@
 import sys
+import os
 import fire
 import gradio as gr
 import torch
 import transformers
-from transformers import LlamaTokenizer, LlamaForCausalLM, GenerationConfig, StoppingCriteria
+from transformers import (
+    LlamaTokenizer,
+    LlamaForCausalLM,
+    GenerationConfig,
+    StoppingCriteria,
+)
 from peft import PeftModel
-from  bot.config import instruction, ai_name, user_name
 
 assert (
     "LlamaTokenizer" in transformers._import_structure["models.llama"]
@@ -32,8 +37,32 @@ def main(
     assert (
         base_model
     ), "Please specify a --base_model, e.g. --base_model='decapoda-research/llama-7b-hf'"
-
+    lora_weights_list = os.listdir(lora_weights)
+    lora_weights_list.sort()
+    latest_weights = ""
+    for dir in lora_weights_list:
+        if not dir.startswith("GIR_"):
+            continue
+        else:
+            if latest_weights == "":
+                latest_weights = dir
+            else:
+                if int(dir[4:]) > int(latest_weights[4:]):
+                    latest_weights = dir
+    weights = (
+        input(
+            f"Please select the weights you want to use: {lora_weights_list} (default: {latest_weights})"
+        )
+        or latest_weights
+    )
+    if weights not in lora_weights_list:
+        for dir in lora_weights_list:
+            if dir.startswith(weights):
+                weights = dir
+                break
+    lora_weights = os.path.join(lora_weights, weights)
     tokenizer = LlamaTokenizer.from_pretrained(base_model)
+    print(f"Loading lora {lora_weights}")
     if device == "cuda":
         print("Loading model in 8-bit mode with cuda")
         model = LlamaForCausalLM.from_pretrained(
@@ -83,6 +112,7 @@ def main(
     model.eval()
     if torch.__version__ >= "2" and sys.platform != "win32":
         model = torch.compile(model)
+
     class StopwordStoppingCriteria(StoppingCriteria):
         def __init__(self, stopword):
             self.stopword = stopword
@@ -94,6 +124,7 @@ def main(
                 print("Stopword:", self.stopword)
                 return True
             return False
+
     def evaluate(
         input=None,
         temperature=1,
@@ -108,7 +139,9 @@ def main(
         stopwords = stopwords_str.split(",")
         inputs = tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(device)
-        stopword_criterias = [StopwordStoppingCriteria(stopword) for stopword in stopwords]
+        stopword_criterias = [
+            StopwordStoppingCriteria(stopword) for stopword in stopwords
+        ]
         generation_config = GenerationConfig(
             temperature=temperature,
             top_p=top_p,
@@ -135,6 +168,7 @@ def main(
                 output = output.replace(stopword, "", 1)
         output = output.strip()
         return output
+
     gr.Interface(
         fn=evaluate,
         inputs=[
@@ -144,13 +178,13 @@ def main(
             gr.components.Slider(
                 minimum=0, maximum=100, step=1, value=90, label="Top k"
             ),
-            gr.components.Slider(
-                minimum=1, maximum=4, step=1, value=4, label="Beams"
-            ),
+            gr.components.Slider(minimum=1, maximum=4, step=1, value=4, label="Beams"),
             gr.components.Slider(
                 minimum=1, maximum=2000, step=1, value=128, label="Max tokens"
             ),
-            gr.components.Textbox(lines=1, label="Stopwords", placeholder="Separate with commas"),
+            gr.components.Textbox(
+                lines=1, label="Stopwords", placeholder="Separate with commas"
+            ),
         ],
         outputs=[
             gr.inputs.Textbox(
@@ -161,6 +195,7 @@ def main(
         title="🦙🌲 Alpaca-LoRA",
         description="Alpaca-LoRA is a 7B-parameter LLaMA model finetuned to follow instructions. It is trained on the [Stanford Alpaca](https://github.com/tatsu-lab/stanford_alpaca) dataset and makes use of the Huggingface LLaMA implementation. For more information, please visit [the project's website](https://github.com/tloen/alpaca-lora).",  # noqa: E501
     ).launch()
+
 
 if __name__ == "__main__":
     fire.Fire(main)

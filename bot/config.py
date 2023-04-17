@@ -13,7 +13,7 @@ user_name = "User1"
 data_path = "./data"
 
 load_dotenv()
-token = os.getenv('TOKEN')
+token = os.getenv("TOKEN")
 
 intents = discord.Intents.all()
 bot = discord.Bot(intents=intents)

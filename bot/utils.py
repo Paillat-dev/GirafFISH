@@ -8,25 +8,27 @@ from config import ai_name, user_name, instruction
 if not os.path.exists(path):
     os.makedirs(path)
 
-if not os.path.exists(f'{path}/training'):
-    os.makedirs(f'{path}/training')
+if not os.path.exists(f"{path}/training"):
+    os.makedirs(f"{path}/training")
+
 
 async def add_thread(thread):
-    if not os.path.exists(f'{path}/threads.json'):
-        with open(f'{path}/threads.json', 'w') as f:
+    if not os.path.exists(f"{path}/threads.json"):
+        with open(f"{path}/threads.json", "w") as f:
             json.dump([], f)
             f.close()
-    with open(f'{path}/threads.json', 'r+') as f:
-        #we save the thread id in a json file, with the other threads
+    with open(f"{path}/threads.json", "r+") as f:
+        # we save the thread id in a json file, with the other threads
         threads = json.load(f)
         threads.append(thread)
         f.seek(0)
         json.dump(threads, f, indent=4)
         f.truncate()
 
+
 async def remove_thread(thread):
-    try: 
-        with open(f'{path}/threads.json', 'r+') as f:
+    try:
+        with open(f"{path}/threads.json", "r+") as f:
             threads = json.load(f)
             threads.remove(thread)
             f.seek(0)
@@ -34,59 +36,66 @@ async def remove_thread(thread):
             f.truncate()
     except:
         pass
+
+
 async def get_threads():
-    with open(f'{path}/threads.json', 'r') as f:
+    with open(f"{path}/threads.json", "r") as f:
         threads = json.load(f)
         return threads
 
+
 async def is_thread(thread):
-    if not os.path.exists(f'{path}/threads.json'):
-        with open(f'{path}/threads.json', 'w') as f:
+    if not os.path.exists(f"{path}/threads.json"):
+        with open(f"{path}/threads.json", "w") as f:
             json.dump([], f)
             f.close()
-    with open(f'{path}/threads.json', 'r') as f:
+    with open(f"{path}/threads.json", "r") as f:
         threads = json.load(f)
         if thread in threads:
             return True
         else:
             return False
 
-async def get_response(prompt, stopwords:str = f"{user_name}:,{ai_name}:"):
+
+async def get_response(prompt, stopwords: str = "[EOS]"):
     async with aiohttp.ClientSession() as session:
-        async with session.post("http://localhost:7860/run/predict", json={
-            "data": [
-                prompt,
-                0.9,
-                0.8,
-                50,
-                4,
-                128,
-                stopwords,
-            ]
-        }) as response:
+        async with session.post(
+            "http://localhost:7860/run/predict",
+            json={
+                "data": [
+                    prompt,
+                    0.9,
+                    0.8,
+                    50,
+                    4,
+                    128,
+                    stopwords,
+                ]
+            },
+        ) as response:
             data = (await response.json())["data"][0]
             data = data.split(f"{ai_name}:")
             data = data[len(data) - 1]
-            data = data.replace("\\begin{blockquote}", "").replace("\\end{blockquote}", "")
+            data = data.replace("\\begin{blockquote}", "").replace(
+                "\\end{blockquote}", ""
+            )
             return data.strip()
 
+
 def add_training_data(output, input):
-    #with open(f'{path}/training/training_data.json', 'a', encoding='utf-8') as f:
+    # with open(f'{path}/training/training_data.json', 'a', encoding='utf-8') as f:
     #    f.write(f'{{"input": "{input}", "output": "{output}"}}')
     #    f.close()
-    #first get the current training data
-    try: 
-        with open(f'{path}/training/training_data.json', 'r') as f:
+    # first get the current training data
+    try:
+        with open(f"{path}/training/training_data.json", "r") as f:
             data = json.load(f)
             f.close()
     except:
         data = []
-    #then add the new data
-    data.append({
-        "input": input,
-        "output": output
-    })
-    #then save the new data
-    with open(f'{path}/training/training_data.json', 'w') as f:
+    # then add the new data
+    data.append({"prompt": input, "response": output})
+    # then save the new data
+    with open(f"{path}/training/training_data.json", "w") as f:
         json.dump(data, f, indent=4)
         f.close()
